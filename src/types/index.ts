@@ -6,7 +6,7 @@ export type UserRole = "master_admin" | "global_admin" | "training_admin";
 
 export type CampaignChannel = "email" | "sms" | "voice" | "direct_mail";
 
-export type CampaignStatus = "draft" | "scheduled" | "active" | "paused" | "completed" | "cancelled";
+export type CampaignStatus = "draft" | "scheduled" | "active" | "paused" | "completed" | "cancelled" | "archived";
 
 export type EventType =
   | "sent"
@@ -119,6 +119,8 @@ export interface EmailTemplate {
   from_email: string;
   html_body: string;
   landing_scenario: string | null;
+  difficulty: "easy" | "medium" | "hard" | null;
+  is_global: boolean;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -129,7 +131,9 @@ export interface SmsTemplate {
   organization_id: string | null;
   name: string;
   body: string;
+  sender_id: string | null;
   tracking_url_placeholder: string | null;
+  is_global: boolean;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -141,6 +145,7 @@ export interface VoiceTemplate {
   name: string;
   retell_agent_id: string;
   prompt_summary: string | null;
+  is_global: boolean;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -153,6 +158,7 @@ export interface DirectMailTemplate {
   lob_template_id: string;
   description: string | null;
   qr_code_url_placeholder: string | null;
+  is_global: boolean;
   created_by: string | null;
   created_at: string;
   updated_at: string;
