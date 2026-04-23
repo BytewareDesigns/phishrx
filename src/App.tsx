@@ -16,9 +16,12 @@ const SsoCallback = lazy(() => import("@/pages/SsoCallback"));
 const NotFound    = lazy(() => import("@/pages/NotFound"));
 
 // Admin
-const AdminDashboard    = lazy(() => import("@/pages/admin/Dashboard"));
+const AdminDashboard     = lazy(() => import("@/pages/admin/Dashboard"));
 const AdminOrganizations = lazy(() => import("@/pages/admin/Organizations"));
 const OrganizationDetail = lazy(() => import("@/pages/admin/OrganizationDetail"));
+const AdminUsers         = lazy(() => import("@/pages/admin/Users"));
+const AdminAllCampaigns  = lazy(() => import("@/pages/admin/AllCampaigns"));
+const AdminSettings      = lazy(() => import("@/pages/admin/Settings"));
 
 // Training admin
 const TrainingDashboard = lazy(() => import("@/pages/dashboard/Dashboard"));
@@ -28,22 +31,16 @@ const CampaignNew       = lazy(() => import("@/pages/dashboard/CampaignNew"));
 const CampaignDetail    = lazy(() => import("@/pages/dashboard/CampaignDetail"));
 const Templates         = lazy(() => import("@/pages/dashboard/Templates"));
 const Reports           = lazy(() => import("@/pages/dashboard/Reports"));
+const OrgSettings       = lazy(() => import("@/pages/dashboard/Settings"));
+
+// Shared
+const Profile           = lazy(() => import("@/pages/Profile"));
 
 // ── Page-level loading fallback ──────────────────────────────
 function PageLoader() {
   return (
     <div className="min-h-[60vh] flex items-center justify-center">
       <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-    </div>
-  );
-}
-
-// ── Coming soon placeholder ──────────────────────────────────
-function ComingSoon({ title }: { title: string }) {
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold">{title}</h1>
-      <p className="text-muted-foreground mt-1">Coming soon</p>
     </div>
   );
 }
@@ -98,9 +95,9 @@ export default function App() {
                   <Route path="/admin"                    element={<AdminDashboard />} />
                   <Route path="/admin/organizations"      element={<AdminOrganizations />} />
                   <Route path="/admin/organizations/:id"  element={<OrganizationDetail />} />
-                  <Route path="/admin/users"              element={<ComingSoon title="Users" />} />
-                  <Route path="/admin/campaigns"          element={<ComingSoon title="All Campaigns" />} />
-                  <Route path="/admin/settings"           element={<ComingSoon title="Platform Settings" />} />
+                  <Route path="/admin/users"              element={<AdminUsers />} />
+                  <Route path="/admin/campaigns"          element={<AdminAllCampaigns />} />
+                  <Route path="/admin/settings"           element={<AdminSettings />} />
                 </Route>
               </Route>
 
@@ -114,14 +111,14 @@ export default function App() {
                   <Route path="/dashboard/employees"      element={<Employees />} />
                   <Route path="/dashboard/templates"      element={<Templates />} />
                   <Route path="/dashboard/reports"        element={<Reports />} />
-                  <Route path="/dashboard/settings"       element={<ComingSoon title="Organization Settings" />} />
+                  <Route path="/dashboard/settings"       element={<OrgSettings />} />
                 </Route>
               </Route>
 
               {/* Shared profile route */}
               <Route element={<ProtectedRoute />}>
                 <Route element={<AppLayout />}>
-                  <Route path="/profile" element={<ComingSoon title="My Profile" />} />
+                  <Route path="/profile" element={<Profile />} />
                 </Route>
               </Route>
 
