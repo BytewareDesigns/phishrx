@@ -92,11 +92,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   isAuthenticated: () => !!get().session,
 
-  // Effective role — 'training_admin' when practitioner view is active
+  // Effective role — 'training_admin' when practitioner/impersonation view is active
+  // Both master_admin AND global_admin can impersonate, so both get downgraded.
   getRole: () => {
     const { profile, viewingAsPractitioner } = get();
     if (!profile) return null;
-    if (viewingAsPractitioner && profile.role === "master_admin") return "training_admin";
+    if (viewingAsPractitioner &&
+       (profile.role === "master_admin" || profile.role === "global_admin")) {
+      return "training_admin";
+    }
     return profile.role;
   },
 
@@ -106,13 +110,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   isTrainingAdmin: () => {
     const { profile, viewingAsPractitioner } = get();
-    if (viewingAsPractitioner && profile?.role === "master_admin") return true;
+    if (viewingAsPractitioner &&
+       (profile?.role === "master_admin" || profile?.role === "global_admin")) return true;
     return profile?.role === "training_admin";
   },
 
   isPlatformAdmin: () => {
     const { profile, viewingAsPractitioner } = get();
-    if (viewingAsPractitioner && profile?.role === "master_admin") return false;
+    // When in practitioner/impersonation view, both admin roles act as training_admin
+    if (viewingAsPractitioner &&
+       (profile?.role === "master_admin" || profile?.role === "global_admin")) return false;
     return profile?.role === "master_admin" || profile?.role === "global_admin";
   },
 }));

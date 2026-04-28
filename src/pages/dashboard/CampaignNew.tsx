@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Check, Mail, MessageSquare, Phone, MailOpen } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Mail, MessageSquare, Phone, MailOpen, Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -64,7 +64,7 @@ const detailsSchema = z.object({
 export default function CampaignNew() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { data: org } = useMyOrganization();
+  const { data: org, isLoading: orgLoading } = useMyOrganization();
   const { data: employees }         = useEmployees(org?.id);
   const { data: emailTemplates }    = useEmailTemplates(org?.id);
   const { data: smsTemplates }      = useSmsTemplates(org?.id);
@@ -180,6 +180,27 @@ export default function CampaignNew() {
 
   // ── Step labels ──────────────────────────────────────────
   const templatesMissing = state.channels.some((ch) => !state.templates[ch]);
+
+  // Wait for the organization to resolve (important during impersonation
+  // where useMyOrganization fires a fresh fetch on first render).
+  if (orgLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!org) {
+    return (
+      <div className="p-6 text-center text-muted-foreground">
+        No organization context found.{" "}
+        <button className="text-primary underline" onClick={() => navigate("/dashboard")}>
+          Go to Dashboard
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
