@@ -13,7 +13,7 @@ export function ProtectedRoute({
   allowedRoles,
   redirectTo = "/login",
 }: ProtectedRouteProps) {
-  const { isInitialized, isAuthenticated, profile } = useAuth();
+  const { isInitialized, isAuthenticated, getRole } = useAuth();
 
   // Still loading auth state — show nothing (App handles global loading)
   if (!isInitialized) return null;
@@ -21,11 +21,10 @@ export function ProtectedRoute({
   // Not logged in
   if (!isAuthenticated()) return <Navigate to={redirectTo} replace />;
 
-  // Role check
-  if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
-    // Redirect to their appropriate dashboard
-    const fallback =
-      profile.role === "training_admin" ? "/dashboard" : "/admin";
+  // Role check — uses effective role so practitioner view toggles access correctly
+  const effectiveRole = getRole();
+  if (allowedRoles && effectiveRole && !allowedRoles.includes(effectiveRole)) {
+    const fallback = effectiveRole === "training_admin" ? "/dashboard" : "/admin";
     return <Navigate to={fallback} replace />;
   }
 

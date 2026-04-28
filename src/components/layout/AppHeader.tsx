@@ -6,6 +6,8 @@ import {
   ChevronDown,
   ShieldAlert,
   Building2,
+  LayoutDashboard,
+  ShieldCheck,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -35,7 +37,7 @@ const ROLE_BADGE_CLASS: Record<string, string> = {
 };
 
 export function AppHeader() {
-  const { profile, isPlatformAdmin } = useAuth();
+  const { profile, isPlatformAdmin, isMasterAdmin, viewingAsPractitioner, setViewingAsPractitioner } = useAuth();
   const navigate = useNavigate();
 
   const initials    = getInitials(profile?.first_name, profile?.last_name);
@@ -48,6 +50,12 @@ export function AppHeader() {
     await supabase.auth.signOut();
     toast.success("You have been signed out.");
     navigate("/login");
+  };
+
+  const handleTogglePractitionerView = () => {
+    const next = !viewingAsPractitioner;
+    setViewingAsPractitioner(next);
+    navigate(next ? "/dashboard" : "/admin");
   };
 
   const dashboardHref = isPlatformAdmin() ? "/admin" : "/dashboard";
@@ -134,6 +142,29 @@ export function AppHeader() {
                   Organization Settings
                 </Link>
               </DropdownMenuItem>
+            )}
+
+            {/* Practitioner view toggle — master_admin only */}
+            {isMasterAdmin() && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="flex items-center gap-2 cursor-pointer"
+                  onClick={handleTogglePractitionerView}
+                >
+                  {viewingAsPractitioner ? (
+                    <>
+                      <ShieldCheck className="h-4 w-4 text-primary" />
+                      <span>Back to Admin View</span>
+                    </>
+                  ) : (
+                    <>
+                      <LayoutDashboard className="h-4 w-4" />
+                      <span>View as Practitioner</span>
+                    </>
+                  )}
+                </DropdownMenuItem>
+              </>
             )}
 
             <DropdownMenuSeparator />

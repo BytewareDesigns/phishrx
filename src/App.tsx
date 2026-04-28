@@ -70,9 +70,9 @@ function AuthBootstrap({ children }: { children: React.ReactNode }) {
 
 // ── Root redirect ────────────────────────────────────────────
 function RootRedirect() {
-  const { isAuthenticated, profile } = useAuth();
+  const { isAuthenticated, getRole } = useAuth();
   if (!isAuthenticated()) return <Navigate to="/login" replace />;
-  return <Navigate to={profile?.role === "training_admin" ? "/dashboard" : "/admin"} replace />;
+  return <Navigate to={getRole() === "training_admin" ? "/dashboard" : "/admin"} replace />;
 }
 
 // ── App ──────────────────────────────────────────────────────
