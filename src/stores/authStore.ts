@@ -9,8 +9,11 @@ interface AuthState {
   isLoading: boolean;
   isInitialized: boolean;
 
-  // Master-admin practitioner view toggle (ephemeral — resets on sign-out)
+  // Practitioner / impersonation view (ephemeral — resets on sign-out)
   viewingAsPractitioner: boolean;
+  /** Org the admin is currently impersonating (null = empty preview) */
+  impersonatingOrgId:   string | null;
+  impersonatingOrgName: string | null;
 
   // Actions
   setSession: (session: Session | null) => void;
@@ -19,6 +22,10 @@ interface AuthState {
   setLoading: (loading: boolean) => void;
   setInitialized: (initialized: boolean) => void;
   setViewingAsPractitioner: (value: boolean) => void;
+  /** Enter practitioner view for a specific org (master/global admin only) */
+  startImpersonation: (orgId: string, orgName: string) => void;
+  /** Exit impersonation and return to admin view */
+  exitImpersonation: () => void;
   reset: () => void;
 
   // Computed helpers
@@ -41,17 +48,35 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isLoading: true,
   isInitialized: false,
   viewingAsPractitioner: false,
+  impersonatingOrgId:    null,
+  impersonatingOrgName:  null,
 
   setSession: (session) => set({ session }),
   setUser: (user) => set({ user }),
   setProfile: (profile) => set({ profile }),
   setLoading: (isLoading) => set({ isLoading }),
   setInitialized: (isInitialized) => set({ isInitialized }),
+
   setViewingAsPractitioner: (value) => {
-    // Only master_admin may toggle practitioner view
-    if (get().profile?.role === "master_admin") {
-      set({ viewingAsPractitioner: value });
+    const role = get().profile?.role;
+    if (role === "master_admin" || role === "global_admin") {
+      set({
+        viewingAsPractitioner: value,
+        // Clear impersonation when toggling off via the avatar menu
+        ...(value === false ? { impersonatingOrgId: null, impersonatingOrgName: null } : {}),
+      });
     }
+  },
+
+  startImpersonation: (orgId, orgName) => {
+    const role = get().profile?.role;
+    if (role === "master_admin" || role === "global_admin") {
+      set({ viewingAsPractitioner: true, impersonatingOrgId: orgId, impersonatingOrgName: orgName });
+    }
+  },
+
+  exitImpersonation: () => {
+    set({ viewingAsPractitioner: false, impersonatingOrgId: null, impersonatingOrgName: null });
   },
 
   reset: () =>
@@ -61,6 +86,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       profile: null,
       isLoading: false,
       viewingAsPractitioner: false,
+      impersonatingOrgId:    null,
+      impersonatingOrgName:  null,
     }),
 
   isAuthenticated: () => !!get().session,

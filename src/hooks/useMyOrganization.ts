@@ -4,16 +4,34 @@ import { useAuth } from "@/hooks/useAuth";
 import type { Organization } from "@/types";
 
 /**
- * Returns the first active organization for the current training_admin.
- * Platform admins (global/master) get null — they use org selector.
+ * Returns the active organization for the current user context:
+ *
+ * - Platform admin impersonating an org  → fetches that specific org by ID
+ * - Training admin (normal mode)         → fetches their first assigned org
+ * - Platform admin NOT impersonating     → returns null (they use org selector)
  */
 export function useMyOrganization() {
-  const { user, isPlatformAdmin } = useAuth();
+  const { user, isPlatformAdmin, impersonatingOrgId } = useAuth();
+
+  const isImpersonating = !!impersonatingOrgId;
 
   return useQuery({
-    queryKey: ["my-organization", user?.id],
-    enabled: !!user?.id && !isPlatformAdmin(),
+    queryKey: ["my-organization", user?.id, impersonatingOrgId],
+    enabled: !!user?.id && (isImpersonating || !isPlatformAdmin()),
     queryFn: async () => {
+      if (isImpersonating) {
+        // Admin is impersonating a specific org — fetch it directly.
+        // Platform admins have RLS access to all orgs, so this works.
+        const { data, error } = await supabase
+          .from("organizations")
+          .select("*")
+          .eq("id", impersonatingOrgId!)
+          .single();
+        if (error) throw error;
+        return data as Organization;
+      }
+
+      // Normal training admin path — first active org assignment
       const { data, error } = await supabase
         .from("user_organization_assignments")
         .select("organization_id, organizations(*)")

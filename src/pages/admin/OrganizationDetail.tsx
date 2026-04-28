@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Building2, Users, ShieldAlert, Edit2, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Building2, Users, ShieldAlert, Edit2, CheckCircle2, UserCog } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { useOrganization, useUpdateOrganization } from "@/hooks/useOrganizations";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useCampaigns } from "@/hooks/useCampaigns";
+import { useAuth } from "@/hooks/useAuth";
 import { formatDate } from "@/lib/utils";
 
 const editSchema = z.object({
@@ -31,6 +32,14 @@ export default function OrganizationDetail() {
   const { data: employees }      = useEmployees(id);
   const { data: campaigns }      = useCampaigns(id);
   const updateMutation           = useUpdateOrganization();
+
+  const { isPlatformAdmin, startImpersonation } = useAuth();
+
+  const handleImpersonate = () => {
+    if (!org) return;
+    startImpersonation(org.id, org.name);
+    navigate("/dashboard");
+  };
 
   const form = useForm<EditForm>({
     resolver: zodResolver(editSchema),
@@ -97,9 +106,16 @@ export default function OrganizationDetail() {
             )}
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-          <Edit2 className="h-4 w-4 mr-1" /> Edit
-        </Button>
+        <div className="flex items-center gap-2">
+          {isPlatformAdmin() && (
+            <Button variant="outline" size="sm" onClick={handleImpersonate}>
+              <UserCog className="h-4 w-4 mr-1" /> Impersonate
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+            <Edit2 className="h-4 w-4 mr-1" /> Edit
+          </Button>
+        </div>
       </div>
 
       {/* Stat cards */}

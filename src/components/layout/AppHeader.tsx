@@ -37,7 +37,11 @@ const ROLE_BADGE_CLASS: Record<string, string> = {
 };
 
 export function AppHeader() {
-  const { profile, isPlatformAdmin, isMasterAdmin, viewingAsPractitioner, setViewingAsPractitioner } = useAuth();
+  const {
+    profile, isPlatformAdmin, isMasterAdmin,
+    viewingAsPractitioner, impersonatingOrgName,
+    setViewingAsPractitioner, exitImpersonation,
+  } = useAuth();
   const navigate = useNavigate();
 
   const initials    = getInitials(profile?.first_name, profile?.last_name);
@@ -53,9 +57,15 @@ export function AppHeader() {
   };
 
   const handleTogglePractitionerView = () => {
-    const next = !viewingAsPractitioner;
-    setViewingAsPractitioner(next);
-    navigate(next ? "/dashboard" : "/admin");
+    if (viewingAsPractitioner) {
+      // Exit — clean up impersonation too if active
+      if (impersonatingOrgName) exitImpersonation();
+      else setViewingAsPractitioner(false);
+      navigate("/admin");
+    } else {
+      setViewingAsPractitioner(true);
+      navigate("/dashboard");
+    }
   };
 
   const dashboardHref = isPlatformAdmin() ? "/admin" : "/dashboard";
