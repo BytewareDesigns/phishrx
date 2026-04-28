@@ -6,7 +6,6 @@
 // Headers: Authorization: Bearer <user_jwt>
 // Body: { campaign_id: string }
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   corsHeaders,
@@ -326,7 +325,7 @@ async function sendDirectMail(
 }
 
 // ── Main handler ──────────────────────────────────────────────
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
