@@ -194,24 +194,40 @@ export function useSetCampaignTargets() {
   });
 }
 
-// ── Launch campaign (status → active) ────────────────────────
+// ── Launch campaign via Edge Function ────────────────────────
+// Calls the launch-campaign edge function which:
+//   • creates campaign_targets for all active org employees
+//   • sets status → active
+//   • dispatches sends via SendGrid / Twilio / Retell / Lob
 export function useLaunchCampaign() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (campaignId: string) => {
-      const { data, error } = await supabase
-        .from("campaigns")
-        .update({ status: "active" })
-        .eq("id", campaignId)
-        .select()
-        .single();
+      const { data, error } = await supabase.functions.invoke("launch-campaign", {
+        body: { campaign_id: campaignId },
+      });
       if (error) throw error;
-      return data as Campaign;
+      if (!data?.success) throw new Error(data?.message ?? "Launch failed");
+      return data as {
+        success: boolean;
+        campaign: string;
+        targets: number;
+        sent: { email: number; sms: number; voice: number; direct_mail: number };
+        errors: string[];
+      };
     },
-    onSuccess: (c) => {
-      qc.invalidateQueries({ queryKey: [QUERY_KEY, c.organization_id] });
-      qc.invalidateQueries({ queryKey: [QUERY_KEY, "detail", c.id] });
-      toast.success("Campaign launched!");
+    onSuccess: (result, campaignId) => {
+      qc.invalidateQueries({ queryKey: [QUERY_KEY] });
+      qc.invalidateQueries({ queryKey: [QUERY_KEY, "detail", campaignId] });
+      const { sent } = result;
+      const total = sent.email + sent.sms + sent.voice + sent.direct_mail;
+      toast.success(
+        `Campaign launched! ${total.toLocaleString()} message${total !== 1 ? "s" : ""} sent to ${result.targets} employees.`,
+      );
+      if (result.errors.length > 0) {
+        console.warn("Launch warnings:", result.errors);
+        toast.warning(`${result.errors.length} delivery error(s) — check console for details.`);
+      }
     },
     onError: (err: Error) => toast.error(err.message),
   });

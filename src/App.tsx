@@ -35,6 +35,7 @@ const OrgSettings       = lazy(() => import("@/pages/dashboard/Settings"));
 
 // Shared
 const Profile           = lazy(() => import("@/pages/Profile"));
+const Fail              = lazy(() => import("@/pages/Fail"));
 
 // ── Page-level loading fallback ──────────────────────────────
 function PageLoader() {
@@ -85,6 +86,7 @@ export default function App() {
               {/* Public routes */}
               <Route path="/login"        element={<Login />} />
               <Route path="/sso-callback" element={<SsoCallback />} />
+              <Route path="/fail"         element={<Fail />} />
 
               {/* Root redirect */}
               <Route path="/" element={<RootRedirect />} />
