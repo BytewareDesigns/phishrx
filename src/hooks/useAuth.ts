@@ -8,18 +8,26 @@ export function useAuthProvider() {
     useAuthStore();
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    // Get initial session — always call setInitialized(true), even on error,
+    // so the app never gets stuck on the loading spinner.
+    supabase.auth
+      .getSession()
+      .then(async ({ data: { session } }) => {
+        setSession(session);
+        setUser(session?.user ?? null);
 
-      if (session?.user) {
-        await fetchProfile(session.user.id);
-      }
+        if (session?.user) {
+          await fetchProfile(session.user.id);
+        }
 
-      setLoading(false);
-      setInitialized(true);
-    });
+        setLoading(false);
+        setInitialized(true);
+      })
+      .catch((err) => {
+        console.error("Auth getSession error:", err);
+        setLoading(false);
+        setInitialized(true);
+      });
 
     // Subscribe to auth state changes
     const {
@@ -30,6 +38,12 @@ export function useAuthProvider() {
 
       if (event === "SIGNED_IN" && session?.user) {
         await fetchProfile(session.user.id);
+      } else if (event === "USER_UPDATED" && session?.user) {
+        // Password / email changed — re-fetch profile so store stays current.
+        await fetchProfile(session.user.id);
+      } else if (event === "TOKEN_REFRESHED" && session?.user) {
+        // Refresh token rotated — keep session in sync, no profile re-fetch needed.
+        // setSession / setUser already called above.
       } else if (event === "SIGNED_OUT") {
         reset();
         setInitialized(true);

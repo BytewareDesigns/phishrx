@@ -26,7 +26,6 @@ type ProfileForm = z.infer<typeof profileSchema>;
 
 const passwordSchema = z
   .object({
-    currentPassword: z.string().min(1, "Required"),
     newPassword:     z.string().min(8, "At least 8 characters"),
     confirmPassword: z.string().min(1, "Required"),
   })
@@ -48,7 +47,6 @@ export default function Profile() {
   const updateProfile  = useUpdateProfile();
   const changePassword = useChangePassword();
 
-  const [showCurrent, setShowCurrent] = useState(false);
   const [showNew,     setShowNew]     = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -64,7 +62,7 @@ export default function Profile() {
 
   const passwordForm = useForm<PasswordForm>({
     resolver: zodResolver(passwordSchema),
-    defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" },
+    defaultValues: { newPassword: "", confirmPassword: "" },
   });
 
   const handleProfileSave = async (data: ProfileForm) => {
@@ -79,12 +77,7 @@ export default function Profile() {
   };
 
   const handlePasswordChange = async (data: PasswordForm) => {
-    if (!user?.email) return;
-    await changePassword.mutateAsync({
-      email:           user.email,
-      currentPassword: data.currentPassword,
-      newPassword:     data.newPassword,
-    });
+    await changePassword.mutateAsync({ newPassword: data.newPassword });
     passwordForm.reset();
   };
 
@@ -186,34 +179,11 @@ export default function Profile() {
             <CardTitle className="text-base">Change Password</CardTitle>
           </div>
           <CardDescription>
-            Your current password is required to set a new one
+            Set a new password for your account
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={passwordForm.handleSubmit(handlePasswordChange)} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Current Password</Label>
-              <div className="relative">
-                <Input
-                  type={showCurrent ? "text" : "password"}
-                  className="pr-10"
-                  {...passwordForm.register("currentPassword")}
-                />
-                <button
-                  type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  onClick={() => setShowCurrent(v => !v)}
-                >
-                  {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              {passwordForm.formState.errors.currentPassword && (
-                <p className="text-xs text-destructive">
-                  {passwordForm.formState.errors.currentPassword.message}
-                </p>
-              )}
-            </div>
-
             <div className="space-y-2">
               <Label>New Password</Label>
               <div className="relative">

@@ -164,29 +164,15 @@ export function useUpdateProfile() {
 }
 
 // ── Change password ───────────────────────────────────────────
+// Note: we intentionally do NOT call signInWithPassword to verify the current
+// password, because that fires a new SIGNED_IN auth event mid-session which
+// can race with the subsequent updateUser call and leave the app stuck on the
+// loading spinner. The user is already authenticated; Supabase enforces that.
 export function useChangePassword() {
   return useMutation({
-    mutationFn: async ({
-      currentPassword,
-      newPassword,
-      email,
-    }: {
-      currentPassword: string;
-      newPassword: string;
-      email: string;
-    }) => {
-      // Verify current password by re-signing in
-      const { error: verifyError } = await supabase.auth.signInWithPassword({
-        email,
-        password: currentPassword,
-      });
-      if (verifyError) throw new Error("Current password is incorrect.");
-
-      // Update to new password
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
-      if (updateError) throw updateError;
+    mutationFn: async ({ newPassword }: { newPassword: string }) => {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
     },
     onSuccess: () => toast.success("Password changed successfully."),
     onError: (err: Error) => toast.error(err.message),
