@@ -32,10 +32,12 @@ jobs:
       - name: Build (staging)
         run: npm run build
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL_STAGING }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY_STAGING }}
+          # Supabase anon key is public (ships in browser bundle) — safe to inline.
+          # Staging project: medcurity-phishrx-staging (zkbrrlbwwckgqepeozjd)
+          VITE_SUPABASE_URL: https://zkbrrlbwwckgqepeozjd.supabase.co
+          VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprYnJybGJ3d2NrZ3FlcGVvempkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5NTU4OTcsImV4cCI6MjA5MjUzMTg5N30.fmi0H42Se6kAV0uX2LNwOmcUDWLBh3r1-_lWTgb60yY
           VITE_APP_NAME: PhishRx
-          VITE_APP_URL: https://orange-cliff-09a77cb10.7.azurestaticapps.net
+          VITE_APP_URL: https://staging.phishrx.medcurity.com
 
       - name: Deploy to Azure Static Web Apps (staging)
         uses: Azure/static-web-apps-deploy@v1
