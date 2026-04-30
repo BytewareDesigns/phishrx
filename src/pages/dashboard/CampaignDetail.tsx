@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Mail, MessageSquare, Phone, Package, Users, Send,
   Eye, MousePointerClick, AlertTriangle, CheckCircle2, Clock, Loader2,
+  Pause, Play, X, Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +12,11 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  useCampaign, useLaunchCampaign,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  useCampaign, useLaunchCampaign, useUpdateCampaign,
   useCampaignStats, useCampaignTotals, useCampaignTargetStatuses,
   type CampaignDetail as CampaignDetailType,
   type TargetStatus,
@@ -82,6 +88,8 @@ export default function CampaignDetail() {
   const { data: channelStats }        = useCampaignStats(id);
   const { data: targetStatuses }      = useCampaignTargetStatuses(id);
   const launchMutation                = useLaunchCampaign();
+  const updateMutation                = useUpdateCampaign();
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   if (isLoading) {
     return (
@@ -146,19 +154,92 @@ export default function CampaignDetail() {
             <span>Created: {formatDateTime(c.created_at)}</span>
           </div>
         </div>
-        {c.status === "draft" && (
-          <Button
-            onClick={() => launchMutation.mutate(c.id)}
-            disabled={launchMutation.isPending}
-          >
-            {launchMutation.isPending ? (
-              <><Loader2 className="h-4 w-4 animate-spin mr-1" />Launching…</>
-            ) : (
-              "Launch Campaign"
-            )}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {c.status === "draft" && (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/dashboard/campaigns/new?edit=${c.id}`)}
+              >
+                <Pencil className="h-4 w-4 mr-1" /> Edit
+              </Button>
+              <Button
+                onClick={() => launchMutation.mutate(c.id)}
+                disabled={launchMutation.isPending}
+              >
+                {launchMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 animate-spin mr-1" />Launching…</>
+                ) : (
+                  "Launch Campaign"
+                )}
+              </Button>
+            </>
+          )}
+
+          {c.status === "active" && (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => updateMutation.mutate({ id: c.id, status: "paused" })}
+                disabled={updateMutation.isPending}
+              >
+                <Pause className="h-4 w-4 mr-1" /> Pause
+              </Button>
+              <Button
+                variant="outline"
+                className="border-destructive/40 text-destructive hover:bg-destructive/5 hover:text-destructive"
+                onClick={() => setConfirmCancel(true)}
+              >
+                <X className="h-4 w-4 mr-1" /> Cancel
+              </Button>
+            </>
+          )}
+
+          {c.status === "paused" && (
+            <>
+              <Button
+                onClick={() => updateMutation.mutate({ id: c.id, status: "active" })}
+                disabled={updateMutation.isPending}
+              >
+                <Play className="h-4 w-4 mr-1" /> Resume
+              </Button>
+              <Button
+                variant="outline"
+                className="border-destructive/40 text-destructive hover:bg-destructive/5 hover:text-destructive"
+                onClick={() => setConfirmCancel(true)}
+              >
+                <X className="h-4 w-4 mr-1" /> Cancel
+              </Button>
+            </>
+          )}
+        </div>
       </div>
+
+      {/* Cancel confirmation */}
+      <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel "{c.name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The campaign will be marked cancelled and stop being included in active
+              dashboards. Already-sent messages cannot be recalled. Historical event
+              data is preserved.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep campaign active</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                updateMutation.mutate({ id: c.id, status: "cancelled" });
+                setConfirmCancel(false);
+              }}
+            >
+              Cancel campaign
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Active channels */}
       {channels.length > 0 && (

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Check, Mail, MessageSquare, Phone, MailOpen, Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,7 +16,11 @@ import { cn } from "@/lib/utils";
 import { useMyOrganization } from "@/hooks/useMyOrganization";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useEmailTemplates, useSmsTemplates, useVoiceTemplates, useDirectMailTemplates } from "@/hooks/useTemplates";
-import { useCreateCampaign, useAddCampaignChannels, useSetCampaignTargets, useLaunchCampaign } from "@/hooks/useCampaigns";
+import {
+  useCreateCampaign, useUpdateCampaign,
+  useAddCampaignChannels, useSetCampaignTargets,
+  useLaunchCampaign, useCampaign,
+} from "@/hooks/useCampaigns";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
@@ -63,8 +67,13 @@ const detailsSchema = z.object({
 
 export default function CampaignNew() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get("edit");
+  const isEdit = !!editId;
+
   const { user } = useAuth();
   const { data: org, isLoading: orgLoading } = useMyOrganization();
+  const { data: existing, isLoading: editLoading } = useCampaign(editId ?? undefined);
   const { data: employees }         = useEmployees(org?.id);
   const { data: emailTemplates }    = useEmailTemplates(org?.id);
   const { data: smsTemplates }      = useSmsTemplates(org?.id);
@@ -72,6 +81,7 @@ export default function CampaignNew() {
   const { data: dmTemplates }       = useDirectMailTemplates(org?.id);
 
   const createCampaign    = useCreateCampaign();
+  const updateCampaign    = useUpdateCampaign();
   const addChannels       = useAddCampaignChannels();
   const setTargets        = useSetCampaignTargets();
   const launchCampaign    = useLaunchCampaign();
@@ -83,11 +93,55 @@ export default function CampaignNew() {
   });
   const [targetSearch, setTargetSearch] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
   const detailsForm = useForm<z.infer<typeof detailsSchema>>({
     resolver: zodResolver(detailsSchema),
     defaultValues: { name: state.name, description: state.description },
   });
+
+  // ── Hydrate wizard state when editing an existing draft ─────
+  useEffect(() => {
+    if (!isEdit || !existing || hydrated) return;
+
+    // Only allow editing drafts — anything else, send the user to detail page
+    if (existing.status !== "draft") {
+      toast.error("Only draft campaigns can be edited.");
+      navigate(`/dashboard/campaigns/${existing.id}`, { replace: true });
+      return;
+    }
+
+    const channels = (existing.campaign_channels ?? []).map((ch) => ch.channel as ChannelKey);
+    const templates: WizardState["templates"] = {};
+    for (const ch of existing.campaign_channels ?? []) {
+      if (ch.channel === "email"       && ch.email_template_id)      templates.email       = ch.email_template_id;
+      if (ch.channel === "sms"         && ch.sms_template_id)        templates.sms         = ch.sms_template_id;
+      if (ch.channel === "voice"       && ch.voice_template_id)      templates.voice       = ch.voice_template_id;
+      if (ch.channel === "direct_mail" && ch.directmail_template_id) templates.direct_mail = ch.directmail_template_id;
+    }
+
+    const formatLocal = (iso: string | null) => {
+      if (!iso) return "";
+      const d = new Date(iso);
+      // datetime-local expects YYYY-MM-DDTHH:mm with NO timezone
+      const pad = (n: number) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+
+    const newState: WizardState = {
+      name:        existing.name,
+      description: existing.description ?? "",
+      channels,
+      templates,
+      targetIds:   (existing.campaign_targets ?? []).map((t) => t.employee_id),
+      startDate:   formatLocal(existing.start_date),
+      endDate:     formatLocal(existing.end_date),
+    };
+
+    setState(newState);
+    detailsForm.reset({ name: newState.name, description: newState.description });
+    setHydrated(true);
+  }, [isEdit, existing, hydrated, detailsForm, navigate]);
 
   // ── Navigation ───────────────────────────────────────────
   const next = () => setStep((s) => Math.min(s + 1, STEPS.length));
@@ -133,22 +187,37 @@ export default function CampaignNew() {
     (e) => `${e.first_name} ${e.last_name} ${e.email} ${e.department ?? ""}`.toLowerCase().includes(targetSearch.toLowerCase())
   );
 
-  // ── Final submit: create campaign + add channels + targets + launch ──
+  // ── Final submit: create or update campaign, add channels + targets, optionally launch ──
   const handleLaunch = async (launchNow: boolean) => {
     if (!org?.id || !user?.id) return;
     setIsSubmitting(true);
     try {
-      // 1. Create campaign
-      const campaign = await createCampaign.mutateAsync({
-        organization_id: org.id,
-        name:            state.name,
-        description:     state.description || undefined,
-        start_date:      state.startDate   || undefined,
-        end_date:        state.endDate     || undefined,
-        created_by:      user.id,
-      });
+      let campaignId: string;
 
-      // 2. Add channels
+      if (isEdit && existing) {
+        // Edit mode — update the existing draft in place
+        const updated = await updateCampaign.mutateAsync({
+          id:          existing.id,
+          name:        state.name,
+          description: state.description || undefined,
+          start_date:  state.startDate   || undefined,
+          end_date:    state.endDate     || undefined,
+        });
+        campaignId = updated.id;
+      } else {
+        // Create mode
+        const created = await createCampaign.mutateAsync({
+          organization_id: org.id,
+          name:            state.name,
+          description:     state.description || undefined,
+          start_date:      state.startDate   || undefined,
+          end_date:        state.endDate     || undefined,
+          created_by:      user.id,
+        });
+        campaignId = created.id;
+      }
+
+      // Add/replace channels (upsert handles both)
       const channelRows = state.channels.map((ch) => ({
         channel:               ch,
         email_template_id:     ch === "email"       ? state.templates.email       : undefined,
@@ -156,23 +225,23 @@ export default function CampaignNew() {
         voice_template_id:     ch === "voice"       ? state.templates.voice       : undefined,
         directmail_template_id: ch === "direct_mail" ? state.templates.direct_mail : undefined,
       }));
-      await addChannels.mutateAsync({ campaignId: campaign.id, channels: channelRows });
+      await addChannels.mutateAsync({ campaignId, channels: channelRows });
 
-      // 3. Set targets
+      // Replace targets (delete + insert)
       if (state.targetIds.length > 0) {
-        await setTargets.mutateAsync({ campaignId: campaign.id, employeeIds: state.targetIds });
+        await setTargets.mutateAsync({ campaignId, employeeIds: state.targetIds });
       }
 
-      // 4. Optionally launch
+      // Optionally launch
       if (launchNow) {
-        await launchCampaign.mutateAsync(campaign.id);
+        await launchCampaign.mutateAsync(campaignId);
       } else {
-        toast.success("Campaign saved as draft.");
+        toast.success(isEdit ? "Draft updated." : "Campaign saved as draft.");
       }
 
-      navigate(`/dashboard/campaigns/${campaign.id}`);
+      navigate(`/dashboard/campaigns/${campaignId}`);
     } catch {
-      toast.error("Failed to create campaign. Please try again.");
+      toast.error(isEdit ? "Failed to update campaign." : "Failed to create campaign.");
     } finally {
       setIsSubmitting(false);
     }
@@ -182,8 +251,9 @@ export default function CampaignNew() {
   const templatesMissing = state.channels.some((ch) => !state.templates[ch]);
 
   // Wait for the organization to resolve (important during impersonation
-  // where useMyOrganization fires a fresh fetch on first render).
-  if (orgLoading) {
+  // where useMyOrganization fires a fresh fetch on first render). Also wait
+  // on the existing-campaign fetch when we're in edit mode.
+  if (orgLoading || (isEdit && (editLoading || !hydrated))) {
     return (
       <div className="flex items-center justify-center min-h-[40vh]">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -210,8 +280,12 @@ export default function CampaignNew() {
           <ArrowLeft className="h-4 w-4 mr-1" /> Campaigns
         </Button>
         <div>
-          <h1 className="text-2xl font-semibold">New Campaign</h1>
-          <p className="text-sm text-muted-foreground">{org?.name}</p>
+          <h1 className="text-2xl font-semibold">
+            {isEdit ? "Edit Campaign" : "New Campaign"}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {org?.name}{isEdit && existing && ` · editing draft "${existing.name}"`}
+          </p>
         </div>
       </div>
 
@@ -447,6 +521,15 @@ export default function CampaignNew() {
                 />
               </div>
             </div>
+
+            {/* Live schedule preview */}
+            <SchedulePreview
+              channelCount={state.channels.length}
+              targetCount={state.targetIds.length}
+              startDate={state.startDate}
+              endDate={state.endDate}
+            />
+
             <p className="text-xs text-muted-foreground">
               Leave blank to save as a draft without a schedule. You can set the schedule later.
             </p>
@@ -492,10 +575,10 @@ export default function CampaignNew() {
               </Button>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => handleLaunch(false)} disabled={isSubmitting}>
-                  Save as Draft
+                  {isEdit ? "Save Changes" : "Save as Draft"}
                 </Button>
                 <Button onClick={() => handleLaunch(true)} disabled={isSubmitting}>
-                  {isSubmitting ? "Launching…" : "Launch Campaign"}
+                  {isSubmitting ? "Launching…" : isEdit ? "Save & Launch" : "Launch Campaign"}
                 </Button>
               </div>
             </div>
@@ -511,6 +594,77 @@ function ReviewRow({ label, value }: { label: string; value: React.ReactNode }) 
     <div className="flex items-start gap-4 px-4 py-3">
       <p className="text-sm text-muted-foreground w-32 shrink-0">{label}</p>
       <div className="text-sm font-medium flex-1">{value}</div>
+    </div>
+  );
+}
+
+function SchedulePreview({
+  channelCount, targetCount, startDate, endDate,
+}: {
+  channelCount: number;
+  targetCount:  number;
+  startDate:    string;
+  endDate:      string;
+}) {
+  const totalMessages = channelCount * targetCount;
+
+  if (channelCount === 0 || targetCount === 0) {
+    return (
+      <div className="rounded-md border border-muted bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+        Select channels and targets first to preview the send volume.
+      </div>
+    );
+  }
+
+  if (!startDate || !endDate) {
+    return (
+      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        <span className="font-medium">{totalMessages.toLocaleString()}</span> message
+        {totalMessages !== 1 ? "s" : ""} will be queued
+        ({channelCount} channel{channelCount !== 1 ? "s" : ""} × {targetCount} target{targetCount !== 1 ? "s" : ""}).
+        Set start/end dates to schedule, or leave blank to dispatch immediately on launch.
+      </div>
+    );
+  }
+
+  const start = new Date(startDate);
+  const end   = new Date(endDate);
+  const ms    = end.getTime() - start.getTime();
+
+  if (ms <= 0) {
+    return (
+      <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+        End date must be after start date.
+      </div>
+    );
+  }
+
+  const days  = ms / (1000 * 60 * 60 * 24);
+  const hours = ms / (1000 * 60 * 60);
+  const perDay  = Math.round(totalMessages / Math.max(days, 1));
+  const perHour = Math.round(totalMessages / Math.max(hours, 1));
+
+  const windowDescription = days >= 1
+    ? `${days.toFixed(days >= 7 ? 0 : 1)} day${days !== 1 ? "s" : ""}`
+    : `${hours.toFixed(hours >= 2 ? 0 : 1)} hour${hours !== 1 ? "s" : ""}`;
+
+  const cadence = days >= 1
+    ? `~${perDay.toLocaleString()} message${perDay !== 1 ? "s" : ""}/day`
+    : `~${perHour.toLocaleString()} message${perHour !== 1 ? "s" : ""}/hour`;
+
+  return (
+    <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs text-blue-900 space-y-1">
+      <p>
+        <span className="font-semibold">{totalMessages.toLocaleString()}</span> total message
+        {totalMessages !== 1 ? "s" : ""} ({channelCount} channel{channelCount !== 1 ? "s" : ""} × {targetCount} target{targetCount !== 1 ? "s" : ""})
+      </p>
+      <p>
+        Distributed over <span className="font-semibold">{windowDescription}</span>
+        {" — "}roughly <span className="font-semibold">{cadence}</span>.
+      </p>
+      <p className="text-blue-700/80">
+        Sends are randomized to avoid spike detection by employee email filters.
+      </p>
     </div>
   );
 }
