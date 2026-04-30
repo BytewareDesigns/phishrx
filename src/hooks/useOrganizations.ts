@@ -3,7 +3,8 @@ import { supabase } from "@/lib/supabase";
 import type { Organization, CampaignPackage } from "@/types";
 import { toast } from "sonner";
 
-const QUERY_KEY = "organizations";
+const QUERY_KEY    = "organizations";
+const PACKAGES_KEY = "campaign-packages";
 
 // ── Fetch all organizations ───────────────────────────────────
 export function useOrganizations() {
@@ -38,21 +39,58 @@ export function useOrganization(id: string | undefined) {
 }
 
 // ── Create organization ──────────────────────────────────────
+// Also auto-provisions a default email-only campaign_package so the org can
+// launch its first campaign immediately without waiting on the Medcurity
+// billing system to push a real subscription. Master/global admins can
+// expand the package (seats, channels, dates) later from the org's
+// Subscription tab.
+const DEFAULT_PACKAGE = {
+  total_seats:      100,
+  used_seats:       0,
+  channels_enabled: ["email"] as const,
+  durationMonths:   12,
+};
+
 export function useCreateOrganization() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: { name: string; external_company_id?: string; logo_url?: string }) => {
-      const { data, error } = await supabase
+      const { data: org, error } = await supabase
         .from("organizations")
         .insert(payload)
         .select()
         .single();
       if (error) throw error;
-      return data as Organization;
+
+      // Provision a default subscription package — best-effort, don't fail
+      // org creation if this errors (admin can add manually).
+      const start = new Date();
+      const end   = new Date(start);
+      end.setMonth(end.getMonth() + DEFAULT_PACKAGE.durationMonths);
+
+      const { error: pkgError } = await supabase
+        .from("campaign_packages")
+        .insert({
+          organization_id:          org.id,
+          external_subscription_id: `phishrx-default-${org.id}`,
+          channels_enabled:         DEFAULT_PACKAGE.channels_enabled,
+          total_seats:              DEFAULT_PACKAGE.total_seats,
+          used_seats:               DEFAULT_PACKAGE.used_seats,
+          start_date:               start.toISOString(),
+          end_date:                 end.toISOString(),
+          is_active:                true,
+        });
+
+      if (pkgError) {
+        console.warn("Default package provisioning failed:", pkgError.message);
+      }
+
+      return org as Organization;
     },
-    onSuccess: () => {
+    onSuccess: (org) => {
       qc.invalidateQueries({ queryKey: [QUERY_KEY] });
-      toast.success("Organization created.");
+      qc.invalidateQueries({ queryKey: [PACKAGES_KEY, org.id] });
+      toast.success("Organization created with default email subscription.");
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -101,8 +139,6 @@ export function useArchiveOrganization() {
 }
 
 // ── Campaign Packages (subscription) ──────────────────────────
-const PACKAGES_KEY = "campaign-packages";
-
 export function useCampaignPackages(organizationId?: string) {
   return useQuery({
     queryKey: [PACKAGES_KEY, organizationId],

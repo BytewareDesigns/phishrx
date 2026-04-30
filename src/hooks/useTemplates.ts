@@ -89,6 +89,23 @@ export function useVoiceTemplates(organizationId?: string) {
   });
 }
 
+export function useCreateVoiceTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Omit<VoiceTemplate, "id" | "created_at" | "updated_at">) => {
+      const { data, error } = await supabase.from("voice_templates").insert(payload).select().single();
+      if (error) throw error;
+      return data as VoiceTemplate;
+    },
+    onSuccess: (t) => {
+      qc.invalidateQueries({ queryKey: ["voice-templates", t.organization_id] });
+      qc.invalidateQueries({ queryKey: ["voice-templates", undefined] });
+      toast.success("Voice template created.");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
 // ── Direct Mail Templates ─────────────────────────────────────
 export function useDirectMailTemplates(organizationId?: string) {
   return useQuery({
@@ -104,6 +121,23 @@ export function useDirectMailTemplates(organizationId?: string) {
       if (error) throw error;
       return data as DirectMailTemplate[];
     },
+  });
+}
+
+export function useCreateDirectMailTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Omit<DirectMailTemplate, "id" | "created_at" | "updated_at">) => {
+      const { data, error } = await supabase.from("direct_mail_templates").insert(payload).select().single();
+      if (error) throw error;
+      return data as DirectMailTemplate;
+    },
+    onSuccess: (t) => {
+      qc.invalidateQueries({ queryKey: ["directmail-templates", t.organization_id] });
+      qc.invalidateQueries({ queryKey: ["directmail-templates", undefined] });
+      toast.success("Direct mail template created.");
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 }
 

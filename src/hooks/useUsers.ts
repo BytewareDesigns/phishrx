@@ -202,6 +202,39 @@ export function useUpdateProfile() {
   });
 }
 
+// ── Invite a new training admin to an organization ────────────
+// Hits the invite-user Edge Function which:
+//   * verifies caller is a platform admin
+//   * sends the Supabase auth invite email
+//   * pre-creates the org assignment so the user is ready to use the app
+//     the moment they accept
+export function useInviteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      email:           string;
+      first_name:      string;
+      last_name:       string;
+      organization_id: string;
+    }) => {
+      const { data, error } = await supabase.functions.invoke("invite-user", {
+        body: payload,
+      });
+      if (error) throw error;
+      if (!data?.success) {
+        throw new Error(data?.message ?? "Invite failed");
+      }
+      return data as { success: boolean; user_id: string; email: string };
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: [QUERY_KEY] });
+      qc.invalidateQueries({ queryKey: [QUERY_KEY, "by-org", vars.organization_id] });
+      toast.success(`Invite sent to ${vars.email}.`);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
 // ── Change password ───────────────────────────────────────────
 // Note: we intentionally do NOT call signInWithPassword to verify the current
 // password, because that fires a new SIGNED_IN auth event mid-session which

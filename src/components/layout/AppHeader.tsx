@@ -88,6 +88,7 @@ export function AppHeader() {
             <Link to="/admin/organizations" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Organizations</Link>
             <Link to="/admin/users"         className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Users</Link>
             <Link to="/admin/campaigns"     className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Campaigns</Link>
+            <Link to="/admin/templates"     className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Templates</Link>
           </>
         ) : (
           <>

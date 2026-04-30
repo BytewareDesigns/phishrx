@@ -1,10 +1,16 @@
 import { useState } from "react";
-import { Users, UserPlus, Trash2, Mail, ShieldCheck } from "lucide-react";
+import { Users, UserPlus, Trash2, Mail, ShieldCheck, Send } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -18,9 +24,19 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useOrgUsers, useUsers, useAssignUserToOrg, useRemoveUserFromOrg } from "@/hooks/useUsers";
+import {
+  useOrgUsers, useUsers, useAssignUserToOrg, useRemoveUserFromOrg,
+  useInviteUser,
+} from "@/hooks/useUsers";
 import { getInitials, formatDate } from "@/lib/utils";
 import type { UserRole } from "@/types";
+
+const inviteSchema = z.object({
+  email:      z.string().email("Enter a valid email"),
+  first_name: z.string().min(1, "Required"),
+  last_name:  z.string().min(1, "Required"),
+});
+type InviteForm = z.infer<typeof inviteSchema>;
 
 interface Props {
   organizationId: string;
@@ -37,11 +53,18 @@ export function OrgUsersTab({ organizationId, organizationName }: Props) {
   const { data: assignments, isLoading } = useOrgUsers(organizationId);
   const { data: allUsers }   = useUsers();
   const assign = useAssignUserToOrg();
+  const invite = useInviteUser();
   const remove = useRemoveUserFromOrg();
 
   const [addOpen, setAddOpen]           = useState(false);
+  const [addTab, setAddTab]             = useState<"existing" | "invite">("existing");
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [removeTarget, setRemoveTarget] = useState<{ userId: string; name: string } | null>(null);
+
+  const inviteForm = useForm<InviteForm>({
+    resolver: zodResolver(inviteSchema),
+    defaultValues: { email: "", first_name: "", last_name: "" },
+  });
 
   // Eligible candidates = active, non-archived users not already assigned
   const assignedIds = new Set((assignments ?? []).map((a) => a.user_id));
@@ -58,6 +81,17 @@ export function OrgUsersTab({ organizationId, organizationName }: Props) {
     });
     setAddOpen(false);
     setSelectedUserId("");
+  };
+
+  const handleInvite = async (data: InviteForm) => {
+    await invite.mutateAsync({
+      email:           data.email,
+      first_name:      data.first_name,
+      last_name:       data.last_name,
+      organization_id: organizationId,
+    });
+    setAddOpen(false);
+    inviteForm.reset();
   };
 
   const handleRemove = async () => {
@@ -163,55 +197,128 @@ export function OrgUsersTab({ organizationId, organizationName }: Props) {
         )}
       </CardContent>
 
-      {/* Add user dialog */}
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+      {/* Add user dialog — two modes: assign existing, or invite new by email */}
+      <Dialog
+        open={addOpen}
+        onOpenChange={(v) => {
+          setAddOpen(v);
+          if (!v) {
+            setSelectedUserId("");
+            inviteForm.reset();
+            setAddTab("existing");
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Assign User to {organizationName}</DialogTitle>
+            <DialogTitle>Add User to {organizationName}</DialogTitle>
             <DialogDescription>
-              Select an existing training admin to assign to this organization.
+              Assign an existing training admin or invite a new one by email.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-              <SelectTrigger>
-                <SelectValue placeholder={
-                  eligibleUsers.length === 0
-                    ? "No eligible users available"
-                    : "Choose a user…"
-                } />
-              </SelectTrigger>
-              <SelectContent>
-                {eligibleUsers.length === 0 ? (
-                  <SelectItem value="__none" disabled>
-                    All training admins are already assigned
-                  </SelectItem>
-                ) : (
-                  eligibleUsers.map((u) => {
-                    const name = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
-                    return (
-                      <SelectItem key={u.id} value={u.id}>
-                        {name ? `${name} — ${u.email}` : u.email}
-                      </SelectItem>
-                    );
-                  })
-                )}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Only existing users with the Training Admin role appear here.
-              To create a new user, use the Users page.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
-            <Button
-              onClick={handleAdd}
-              disabled={!selectedUserId || assign.isPending}
-            >
-              {assign.isPending ? "Assigning…" : "Assign User"}
-            </Button>
-          </DialogFooter>
+
+          <Tabs value={addTab} onValueChange={(v) => setAddTab(v as "existing" | "invite")}>
+            <TabsList className="grid grid-cols-2 w-full">
+              <TabsTrigger value="existing" className="gap-1.5">
+                <UserPlus className="h-3.5 w-3.5" /> Assign Existing
+              </TabsTrigger>
+              <TabsTrigger value="invite" className="gap-1.5">
+                <Send className="h-3.5 w-3.5" /> Invite New
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="existing" className="space-y-3 pt-3">
+              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                <SelectTrigger>
+                  <SelectValue placeholder={
+                    eligibleUsers.length === 0
+                      ? "No eligible users available"
+                      : "Choose a user…"
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  {eligibleUsers.length === 0 ? (
+                    <SelectItem value="__none" disabled>
+                      All training admins are already assigned
+                    </SelectItem>
+                  ) : (
+                    eligibleUsers.map((u) => {
+                      const name = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
+                      return (
+                        <SelectItem key={u.id} value={u.id}>
+                          {name ? `${name} — ${u.email}` : u.email}
+                        </SelectItem>
+                      );
+                    })
+                  )}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Only existing users with the Training Admin role appear here.
+                To create a brand-new user, switch to the Invite New tab.
+              </p>
+              <DialogFooter className="pt-2">
+                <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+                <Button
+                  onClick={handleAdd}
+                  disabled={!selectedUserId || assign.isPending}
+                >
+                  {assign.isPending ? "Assigning…" : "Assign User"}
+                </Button>
+              </DialogFooter>
+            </TabsContent>
+
+            <TabsContent value="invite" className="pt-3">
+              <form onSubmit={inviteForm.handleSubmit(handleInvite)} className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>Email *</Label>
+                  <Input
+                    type="email"
+                    placeholder="jane@example.com"
+                    {...inviteForm.register("email")}
+                  />
+                  {inviteForm.formState.errors.email && (
+                    <p className="text-xs text-destructive">
+                      {inviteForm.formState.errors.email.message}
+                    </p>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>First Name *</Label>
+                    <Input {...inviteForm.register("first_name")} />
+                    {inviteForm.formState.errors.first_name && (
+                      <p className="text-xs text-destructive">
+                        {inviteForm.formState.errors.first_name.message}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Last Name *</Label>
+                    <Input {...inviteForm.register("last_name")} />
+                    {inviteForm.formState.errors.last_name && (
+                      <p className="text-xs text-destructive">
+                        {inviteForm.formState.errors.last_name.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  We'll email a magic link. When they accept, the user is automatically
+                  assigned to <span className="font-medium">{organizationName}</span> as
+                  a Training Admin.
+                </p>
+                <DialogFooter className="pt-2">
+                  <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={invite.isPending}>
+                    {invite.isPending ? "Sending invite…" : "Send Invite"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
 

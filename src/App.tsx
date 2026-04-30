@@ -21,6 +21,7 @@ const AdminOrganizations = lazy(() => import("@/pages/admin/Organizations"));
 const OrganizationDetail = lazy(() => import("@/pages/admin/OrganizationDetail"));
 const AdminUsers         = lazy(() => import("@/pages/admin/Users"));
 const AdminAllCampaigns  = lazy(() => import("@/pages/admin/AllCampaigns"));
+const AdminTemplates     = lazy(() => import("@/pages/admin/Templates"));
 const AdminSettings      = lazy(() => import("@/pages/admin/Settings"));
 
 // Training admin
@@ -99,6 +100,7 @@ export default function App() {
                   <Route path="/admin/organizations/:id"  element={<OrganizationDetail />} />
                   <Route path="/admin/users"              element={<AdminUsers />} />
                   <Route path="/admin/campaigns"          element={<AdminAllCampaigns />} />
+                  <Route path="/admin/templates"          element={<AdminTemplates />} />
                   <Route path="/admin/settings"           element={<AdminSettings />} />
                 </Route>
               </Route>
