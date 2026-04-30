@@ -38,6 +38,45 @@ export function useUserOrgAssignments(userId?: string) {
   });
 }
 
+// ── Fetch all training admin users assigned to an organization ─
+// Used by the admin org-detail "Users" tab so master/global admins
+// can see and manage which training admins are assigned to a given org.
+export type OrgUserAssignment = UserOrganizationAssignment & {
+  user_profiles: UserProfile | null;
+};
+
+export function useOrgUsers(organizationId?: string) {
+  return useQuery({
+    queryKey: [QUERY_KEY, "by-org", organizationId],
+    enabled: !!organizationId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_organization_assignments")
+        .select(`
+          id, organization_id, user_id, role, is_active,
+          assigned_at, assigned_by_integration,
+          user_profiles:user_id (
+            id, email, first_name, last_name, phone, title, role,
+            pending_role, medcurity_user_id, is_archived, archived_at,
+            created_at, updated_at
+          )
+        `)
+        .eq("organization_id", organizationId!)
+        .eq("is_active", true)
+        .order("assigned_at");
+      if (error) throw error;
+      // Supabase typings sometimes infer joined relations as arrays even when
+      // it's a one-to-one foreign-key relation. Normalize to a single object.
+      const rows = (data ?? []).map((row) => {
+        const u = row.user_profiles;
+        const profile = Array.isArray(u) ? u[0] ?? null : u ?? null;
+        return { ...row, user_profiles: profile };
+      });
+      return rows as unknown as OrgUserAssignment[];
+    },
+  });
+}
+
 // ── Update user role ──────────────────────────────────────────
 export function useUpdateUserRole() {
   const qc = useQueryClient();

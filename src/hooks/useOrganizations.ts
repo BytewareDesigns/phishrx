@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import type { Organization } from "@/types";
+import type { Organization, CampaignPackage } from "@/types";
 import { toast } from "sonner";
 
 const QUERY_KEY = "organizations";
@@ -97,5 +97,24 @@ export function useArchiveOrganization() {
       toast.success("Organization deactivated.");
     },
     onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+// ── Campaign Packages (subscription) ──────────────────────────
+const PACKAGES_KEY = "campaign-packages";
+
+export function useCampaignPackages(organizationId?: string) {
+  return useQuery({
+    queryKey: [PACKAGES_KEY, organizationId],
+    enabled: !!organizationId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("campaign_packages")
+        .select("*")
+        .eq("organization_id", organizationId!)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as CampaignPackage[];
+    },
   });
 }
