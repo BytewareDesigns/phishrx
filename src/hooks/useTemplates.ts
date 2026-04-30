@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { EmailTemplate, SmsTemplate, VoiceTemplate, DirectMailTemplate } from "@/types";
+import { audit } from "@/hooks/useAudit";
 import { toast } from "sonner";
 
 // ── Email Templates ───────────────────────────────────────────
@@ -31,6 +32,10 @@ export function useCreateEmailTemplate() {
     },
     onSuccess: (t) => {
       qc.invalidateQueries({ queryKey: ["email-templates", t.organization_id] });
+      audit({
+        action: "template.create", resource_type: "template", resource_id: t.id,
+        new_data: { kind: "email", name: t.name, is_global: t.is_global },
+      });
       toast.success("Email template created.");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -65,6 +70,10 @@ export function useCreateSmsTemplate() {
     },
     onSuccess: (t) => {
       qc.invalidateQueries({ queryKey: ["sms-templates", t.organization_id] });
+      audit({
+        action: "template.create", resource_type: "template", resource_id: t.id,
+        new_data: { kind: "sms", name: t.name, is_global: t.is_global },
+      });
       toast.success("SMS template created.");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -100,6 +109,10 @@ export function useCreateVoiceTemplate() {
     onSuccess: (t) => {
       qc.invalidateQueries({ queryKey: ["voice-templates", t.organization_id] });
       qc.invalidateQueries({ queryKey: ["voice-templates", undefined] });
+      audit({
+        action: "template.create", resource_type: "template", resource_id: t.id,
+        new_data: { kind: "voice", name: t.name, is_global: t.is_global },
+      });
       toast.success("Voice template created.");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -135,6 +148,10 @@ export function useCreateDirectMailTemplate() {
     onSuccess: (t) => {
       qc.invalidateQueries({ queryKey: ["directmail-templates", t.organization_id] });
       qc.invalidateQueries({ queryKey: ["directmail-templates", undefined] });
+      audit({
+        action: "template.create", resource_type: "template", resource_id: t.id,
+        new_data: { kind: "direct_mail", name: t.name, is_global: t.is_global },
+      });
       toast.success("Direct mail template created.");
     },
     onError: (err: Error) => toast.error(err.message),

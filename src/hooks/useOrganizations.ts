@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Organization, CampaignPackage } from "@/types";
+import { audit } from "@/hooks/useAudit";
 import { toast } from "sonner";
 
 const QUERY_KEY    = "organizations";
@@ -90,6 +91,7 @@ export function useCreateOrganization() {
     onSuccess: (org) => {
       qc.invalidateQueries({ queryKey: [QUERY_KEY] });
       qc.invalidateQueries({ queryKey: [PACKAGES_KEY, org.id] });
+      audit({ action: "org.create", resource_type: "organization", resource_id: org.id, new_data: org });
       toast.success("Organization created with default email subscription.");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -113,6 +115,7 @@ export function useUpdateOrganization() {
     onSuccess: (org) => {
       qc.invalidateQueries({ queryKey: [QUERY_KEY] });
       qc.setQueryData([QUERY_KEY, org.id], org);
+      audit({ action: "org.update", resource_type: "organization", resource_id: org.id, new_data: org });
       toast.success("Organization updated.");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -129,9 +132,11 @@ export function useArchiveOrganization() {
         .update({ is_active: false })
         .eq("id", id);
       if (error) throw error;
+      return id;
     },
-    onSuccess: () => {
+    onSuccess: (id) => {
       qc.invalidateQueries({ queryKey: [QUERY_KEY] });
+      audit({ action: "org.deactivate", resource_type: "organization", resource_id: id });
       toast.success("Organization deactivated.");
     },
     onError: (err: Error) => toast.error(err.message),

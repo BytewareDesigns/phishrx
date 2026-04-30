@@ -8,6 +8,7 @@ import {
   Building2,
   LayoutDashboard,
   ShieldCheck,
+  FileText,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -138,12 +139,20 @@ export function AppHeader() {
             </DropdownMenuItem>
 
             {isPlatformAdmin() && (
-              <DropdownMenuItem asChild>
-                <Link to="/admin/settings" className="flex items-center gap-2 cursor-pointer">
-                  <Settings className="h-4 w-4" />
-                  Platform Settings
-                </Link>
-              </DropdownMenuItem>
+              <>
+                <DropdownMenuItem asChild>
+                  <Link to="/admin/settings" className="flex items-center gap-2 cursor-pointer">
+                    <Settings className="h-4 w-4" />
+                    Platform Settings
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/admin/audit-log" className="flex items-center gap-2 cursor-pointer">
+                    <FileText className="h-4 w-4" />
+                    Audit Log
+                  </Link>
+                </DropdownMenuItem>
+              </>
             )}
 
             {!isPlatformAdmin() && (

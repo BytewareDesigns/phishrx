@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Campaign } from "@/types";
+import { audit } from "@/hooks/useAudit";
 import { toast } from "sonner";
 
 const QUERY_KEY = "campaigns";
@@ -242,6 +243,7 @@ export function useCreateCampaign() {
     },
     onSuccess: (c) => {
       qc.invalidateQueries({ queryKey: [QUERY_KEY, c.organization_id] });
+      audit({ action: "campaign.create", resource_type: "campaign", resource_id: c.id, new_data: c });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -261,9 +263,24 @@ export function useUpdateCampaign() {
       if (error) throw error;
       return data as Campaign;
     },
-    onSuccess: (c) => {
+    onSuccess: (c, vars) => {
       qc.invalidateQueries({ queryKey: [QUERY_KEY, c.organization_id] });
       qc.invalidateQueries({ queryKey: [QUERY_KEY, "detail", c.id] });
+
+      // Map status-only updates to specific audit actions, otherwise generic update
+      const action =
+        vars.status === "paused"     ? "campaign.pause"     :
+        vars.status === "active"     ? "campaign.resume"    :
+        vars.status === "cancelled"  ? "campaign.cancel"    :
+        vars.status === "archived"   ? "campaign.archive"   :
+                                       "campaign.update"     ;
+
+      audit({
+        action: action as never,
+        resource_type: "campaign",
+        resource_id:   c.id,
+        new_data:      c,
+      });
       toast.success("Campaign updated.");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -342,6 +359,12 @@ export function useLaunchCampaign() {
     onSuccess: (result, campaignId) => {
       qc.invalidateQueries({ queryKey: [QUERY_KEY] });
       qc.invalidateQueries({ queryKey: [QUERY_KEY, "detail", campaignId] });
+      audit({
+        action: "campaign.launch",
+        resource_type: "campaign",
+        resource_id:   campaignId,
+        new_data:      { targets: result.targets, sent: result.sent },
+      });
       const { sent } = result;
       const total = sent.email + sent.sms + sent.voice + sent.direct_mail;
       toast.success(

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { UserProfile, UserRole, UserOrganizationAssignment } from "@/types";
+import { audit } from "@/hooks/useAudit";
 import { toast } from "sonner";
 
 const QUERY_KEY = "users";
@@ -91,8 +92,9 @@ export function useUpdateUserRole() {
       if (error) throw error;
       return data as UserProfile;
     },
-    onSuccess: () => {
+    onSuccess: (data, vars) => {
       qc.invalidateQueries({ queryKey: [QUERY_KEY] });
+      audit({ action: "user.update_role", resource_type: "user", resource_id: vars.id, new_data: { role: vars.role } });
       toast.success("Role updated.");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -109,9 +111,11 @@ export function useArchiveUser() {
         .update({ is_archived: true, archived_at: new Date().toISOString() })
         .eq("id", id);
       if (error) throw error;
+      return id;
     },
-    onSuccess: () => {
+    onSuccess: (id) => {
       qc.invalidateQueries({ queryKey: [QUERY_KEY] });
+      audit({ action: "user.archive", resource_type: "user", resource_id: id });
       toast.success("User archived.");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -139,8 +143,13 @@ export function useAssignUserToOrg() {
         );
       if (error) throw error;
     },
-    onSuccess: (_, { userId }) => {
-      qc.invalidateQueries({ queryKey: [QUERY_KEY, "assignments", userId] });
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: [QUERY_KEY, "assignments", vars.userId] });
+      qc.invalidateQueries({ queryKey: [QUERY_KEY, "by-org", vars.organizationId] });
+      audit({
+        action: "user.assign", resource_type: "user", resource_id: vars.userId,
+        new_data: { organization_id: vars.organizationId, role: vars.role },
+      });
       toast.success("User assigned to organization.");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -159,8 +168,13 @@ export function useRemoveUserFromOrg() {
         .eq("organization_id", organizationId);
       if (error) throw error;
     },
-    onSuccess: (_, { userId }) => {
-      qc.invalidateQueries({ queryKey: [QUERY_KEY, "assignments", userId] });
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: [QUERY_KEY, "assignments", vars.userId] });
+      qc.invalidateQueries({ queryKey: [QUERY_KEY, "by-org", vars.organizationId] });
+      audit({
+        action: "user.remove", resource_type: "user", resource_id: vars.userId,
+        old_data: { organization_id: vars.organizationId },
+      });
       toast.success("User removed from organization.");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -226,9 +240,13 @@ export function useInviteUser() {
       }
       return data as { success: boolean; user_id: string; email: string };
     },
-    onSuccess: (_, vars) => {
+    onSuccess: (data, vars) => {
       qc.invalidateQueries({ queryKey: [QUERY_KEY] });
       qc.invalidateQueries({ queryKey: [QUERY_KEY, "by-org", vars.organization_id] });
+      audit({
+        action: "user.invite", resource_type: "user", resource_id: data.user_id,
+        new_data: { email: vars.email, organization_id: vars.organization_id },
+      });
       toast.success(`Invite sent to ${vars.email}.`);
     },
     onError: (err: Error) => toast.error(err.message),
