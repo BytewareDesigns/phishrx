@@ -7,7 +7,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useCampaigns } from "@/hooks/useCampaigns";
+import { useCampaigns, useOrgCampaignTotals } from "@/hooks/useCampaigns";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useMyOrganization } from "@/hooks/useMyOrganization";
 import { formatDate } from "@/lib/utils";
@@ -67,6 +67,7 @@ export default function Reports() {
   const { data: org } = useMyOrganization();
   const { data: campaigns, isLoading: loadingCampaigns } = useCampaigns(org?.id);
   const { data: employees, isLoading: loadingEmployees } = useEmployees(org?.id);
+  const { data: orgTotals }                              = useOrgCampaignTotals(org?.id);
 
   const isLoading = loadingCampaigns || loadingEmployees;
 
@@ -171,8 +172,12 @@ export default function Reports() {
         <StatCard
           icon={<MousePointerClick   className="h-4 w-4" />}
           label="Catch Rate"
-          value="—"
-          sub="tracked via events"
+          value={orgTotals ? `${orgTotals.catch_rate.toFixed(1)}%` : "—"}
+          sub={
+            orgTotals && orgTotals.sent > 0
+              ? `${orgTotals.caught} of ${orgTotals.sent} delivered`
+              : "no campaigns sent yet"
+          }
         />
       </div>
 
@@ -305,23 +310,37 @@ export default function Reports() {
         </CardContent>
       </Card>
 
-      {/* Alert note */}
-      <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
-        <CardContent className="pt-4 pb-4">
-          <div className="flex gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-medium text-amber-800 dark:text-amber-400">
-                Detailed analytics coming soon
-              </p>
-              <p className="text-xs text-amber-700 dark:text-amber-500 mt-0.5">
-                Per-employee click tracking, catch rate trends, and channel performance reports will appear here
-                once campaigns are launched and event data is collected.
-              </p>
+      {/* Engagement funnel — real data from campaign_stats view */}
+      {orgTotals && orgTotals.sent > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Engagement Funnel</CardTitle>
+            <CardDescription>How employees moved through your simulations</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+              <FunnelStep label="Sent"      value={orgTotals.sent}      total={orgTotals.sent} />
+              <FunnelStep label="Delivered" value={orgTotals.delivered} total={orgTotals.sent} />
+              <FunnelStep label="Opened"    value={orgTotals.opened}    total={orgTotals.sent} />
+              <FunnelStep label="Clicked"   value={orgTotals.clicked}   total={orgTotals.sent} />
+              <FunnelStep label="Caught"    value={orgTotals.caught}    total={orgTotals.sent} highlight />
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function FunnelStep({
+  label, value, total, highlight,
+}: { label: string; value: number; total: number; highlight?: boolean }) {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+  return (
+    <div className={`rounded-lg border p-3 ${highlight ? "border-rose-200 bg-rose-50/50" : "bg-muted/30"}`}>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={`text-2xl font-bold tabular-nums ${highlight ? "text-rose-700" : ""}`}>{value}</p>
+      <p className="text-xs text-muted-foreground">{pct}%</p>
     </div>
   );
 }

@@ -86,6 +86,9 @@ async function sendEmails(
       const tid = targetIds[emp.id];
       return {
         to: [{ email: emp.email, name: `${emp.first_name} ${emp.last_name}` }],
+        // custom_args ride along with every event in SendGrid's webhook payload
+        // so sendgrid-webhook/index.ts can map provider events back to our targets.
+        custom_args: { target_id: tid, channel: "email" },
         substitutions: {
           "{{FIRST_NAME}}":    emp.first_name,
           "{{LAST_NAME}}":     emp.last_name,
@@ -168,10 +171,15 @@ async function sendSms(
           .replace("{{FIRST_NAME}}", emp.first_name)
           .replace("{{LAST_NAME}}", emp.last_name);
 
+        // Twilio StatusCallback fires on queued/sent/delivered/failed.
+        // Encode target_id in the callback URL so twilio-webhook can map back.
+        const statusCallback = `${supabaseUrl}/functions/v1/twilio-webhook?target_id=${tid}`;
+
         const params = new URLSearchParams({
-          To:   emp.phone,
-          From: from,
-          Body: messageBody,
+          To:             emp.phone,
+          From:           from,
+          Body:           messageBody,
+          StatusCallback: statusCallback,
         });
 
         const res = await fetch(url, {
@@ -201,6 +209,7 @@ async function sendSms(
 /** Retell AI — initiate outbound call per employee */
 async function sendVoiceCalls(
   employees: Employee[],
+  targetIds: Record<string, string>,
   template: { retell_agent_id: string },
 ): Promise<SendResult> {
   const apiKey  = Deno.env.get("RETELL_API_KEY");
@@ -231,7 +240,10 @@ async function sendVoiceCalls(
             from_number: fromNum,
             to_number:   emp.phone,
             agent_id:    agentId,
+            // Retell echoes metadata back in webhook events — include target_id.
             metadata: {
+              target_id:           targetIds[emp.id],
+              channel:             "voice",
               employee_first_name: emp.first_name,
               employee_last_name:  emp.last_name,
               employee_email:      emp.email,
@@ -300,6 +312,9 @@ async function sendDirectMail(
       "merge_variables[qr_url]":       qrUrl,
       "merge_variables[first_name]":   emp.first_name,
       "merge_variables[last_name]":    emp.last_name,
+      // Lob echoes metadata in delivery webhooks — carry target_id through.
+      "metadata[target_id]":           tid,
+      "metadata[channel]":             "direct_mail",
     });
 
     const res = await fetch("https://api.lob.com/v1/letters", {
@@ -489,7 +504,7 @@ Deno.serve(async (req: Request) => {
           .single();
 
         if (tpl) {
-          results.voice = await sendVoiceCalls(employees, tpl);
+          results.voice = await sendVoiceCalls(employees, targetIds, tpl);
 
           if (results.voice.sent > 0) {
             const sentRows = employees

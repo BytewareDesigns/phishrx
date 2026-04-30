@@ -81,7 +81,49 @@ export function useCampaign(id: string | undefined) {
   });
 }
 
-// ── Fetch campaign event stats ────────────────────────────────
+// ── Campaign stats (from campaign_stats view) ─────────────────
+export interface CampaignChannelStats {
+  campaign_id:          string;
+  organization_id:      string;
+  campaign_name:        string;
+  channel:              "email" | "sms" | "voice" | "direct_mail" | null;
+  total_sent:           number;
+  total_delivered:      number;
+  total_opened:         number;
+  total_clicked:        number;
+  total_form_submitted: number;
+  total_caught:         number;
+  catch_rate:           number;
+}
+
+export interface CampaignTotals {
+  sent:           number;
+  delivered:      number;
+  opened:         number;
+  clicked:        number;
+  form_submitted: number;
+  caught:         number;
+  catch_rate:     number;
+}
+
+function aggregateRows(rows: CampaignChannelStats[]): CampaignTotals {
+  const t: CampaignTotals = {
+    sent: 0, delivered: 0, opened: 0, clicked: 0,
+    form_submitted: 0, caught: 0, catch_rate: 0,
+  };
+  for (const r of rows) {
+    t.sent           += r.total_sent           ?? 0;
+    t.delivered      += r.total_delivered      ?? 0;
+    t.opened         += r.total_opened         ?? 0;
+    t.clicked        += r.total_clicked        ?? 0;
+    t.form_submitted += r.total_form_submitted ?? 0;
+    t.caught         += r.total_caught         ?? 0;
+  }
+  t.catch_rate = t.sent > 0 ? Math.round((t.caught / t.sent) * 1000) / 10 : 0;
+  return t;
+}
+
+/** Per-channel stats for a single campaign (one row per channel that had any events) */
 export function useCampaignStats(campaignId: string | undefined) {
   return useQuery({
     queryKey: [QUERY_KEY, "stats", campaignId],
@@ -92,8 +134,89 @@ export function useCampaignStats(campaignId: string | undefined) {
         .select("*")
         .eq("campaign_id", campaignId!);
       if (error) throw error;
-      return data;
+      return data as CampaignChannelStats[];
     },
+  });
+}
+
+/** Aggregated totals across all channels for a single campaign */
+export function useCampaignTotals(campaignId: string | undefined) {
+  const { data, ...rest } = useCampaignStats(campaignId);
+  const totals = data ? aggregateRows(data) : null;
+  return { ...rest, data: totals };
+}
+
+/** Stats for ALL campaigns within an organization, aggregated */
+export function useOrgCampaignTotals(organizationId: string | undefined) {
+  return useQuery({
+    queryKey: [QUERY_KEY, "stats", "org", organizationId],
+    enabled: !!organizationId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("campaign_stats")
+        .select("*")
+        .eq("organization_id", organizationId!);
+      if (error) throw error;
+      return aggregateRows((data ?? []) as CampaignChannelStats[]);
+    },
+  });
+}
+
+// ── Per-target event drill-down ───────────────────────────────
+// Returns a map { employeeId → highest-priority event } for one campaign.
+// Used by CampaignDetail to show a status column on the targets table.
+export type TargetStatus =
+  | "pending"
+  | "sent"
+  | "delivered"
+  | "opened"
+  | "clicked"
+  | "form_submitted"
+  | "caught";
+
+const STATUS_PRIORITY: Record<TargetStatus, number> = {
+  pending:        0,
+  sent:           1,
+  delivered:      2,
+  opened:         3,
+  clicked:        4,
+  form_submitted: 5,
+  caught:         6,
+};
+
+export function useCampaignTargetStatuses(campaignId: string | undefined) {
+  return useQuery({
+    queryKey: [QUERY_KEY, "target-statuses", campaignId],
+    enabled: !!campaignId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("campaign_events")
+        .select("employee_id, event_type, occurred_at, channel")
+        .eq("campaign_id", campaignId!)
+        .order("occurred_at", { ascending: true });
+      if (error) throw error;
+
+      // Group by employee_id, keep the highest-priority event seen
+      const byEmployee = new Map<string, {
+        status:      TargetStatus;
+        last_event:  string;
+      }>();
+
+      for (const row of (data ?? [])) {
+        const status = row.event_type as TargetStatus;
+        if (!STATUS_PRIORITY[status]) continue;
+        const cur = byEmployee.get(row.employee_id);
+        if (!cur || STATUS_PRIORITY[status] > STATUS_PRIORITY[cur.status]) {
+          byEmployee.set(row.employee_id, {
+            status,
+            last_event: row.occurred_at,
+          });
+        }
+      }
+
+      return byEmployee;
+    },
+    refetchInterval: 30_000, // poll every 30s for live campaigns
   });
 }
 
