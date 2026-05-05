@@ -55,6 +55,8 @@ export interface Organization {
   external_company_id: string | null;
   logo_url: string | null;
   is_active: boolean;
+  /** Stamped when training admin completes the Getting Started flow */
+  onboarding_completed_at: string | null;
   created_at: string;
   updated_at: string;
 }

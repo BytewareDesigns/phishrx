@@ -27,6 +27,7 @@ const AdminSettings      = lazy(() => import("@/pages/admin/Settings"));
 
 // Training admin
 const TrainingDashboard = lazy(() => import("@/pages/dashboard/Dashboard"));
+const GettingStarted    = lazy(() => import("@/pages/dashboard/GettingStarted"));
 const Employees         = lazy(() => import("@/pages/dashboard/Employees"));
 const Campaigns         = lazy(() => import("@/pages/dashboard/Campaigns"));
 const CampaignNew       = lazy(() => import("@/pages/dashboard/CampaignNew"));
@@ -111,6 +112,7 @@ export default function App() {
               <Route element={<ProtectedRoute allowedRoles={["training_admin"]} />}>
                 <Route element={<AppLayout />}>
                   <Route path="/dashboard"                element={<TrainingDashboard />} />
+                  <Route path="/dashboard/getting-started" element={<GettingStarted />} />
                   <Route path="/dashboard/campaigns"      element={<Campaigns />} />
                   <Route path="/dashboard/campaigns/new"  element={<CampaignNew />} />
                   <Route path="/dashboard/campaigns/:id"  element={<CampaignDetail />} />

@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEmployees, useCreateEmployee, useArchiveEmployee, useBulkCreateEmployees } from "@/hooks/useEmployees";
 import { useMyOrganization } from "@/hooks/useMyOrganization";
+import { ReasonBanner } from "@/components/onboarding/ReasonBanner";
 import { toast } from "sonner";
 
 const employeeSchema = z.object({
@@ -110,6 +111,9 @@ export default function Employees() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Reason banner — shown when CampaignNew bounced the user here */}
+      <ReasonBanner ready={(employees?.length ?? 0) > 0} />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

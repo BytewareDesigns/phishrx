@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Mail, MessageSquare, Phone, MailIcon, TrendingUp, Users, ShieldCheck,
@@ -14,6 +15,8 @@ import { useEmployees } from "@/hooks/useEmployees";
 import {
   useCampaigns, useOrgCampaignTotals, useCampaignStats,
 } from "@/hooks/useCampaigns";
+import { useOnboardingStatus } from "@/hooks/useOnboarding";
+import { WhatsNextCard } from "@/components/dashboard/WhatsNextCard";
 import { formatDate } from "@/lib/utils";
 
 const CHANNEL_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
@@ -30,6 +33,16 @@ export default function TrainingAdminDashboard() {
   const { data: employees }    = useEmployees(org?.id);
   const { data: campaigns }    = useCampaigns(org?.id);
   const { data: orgTotals }    = useOrgCampaignTotals(org?.id);
+  const { status: onboarding } = useOnboardingStatus(org?.id);
+
+  // First-time experience: redirect to Getting Started when org hasn't
+  // completed onboarding. Only redirect once we know the status — avoids
+  // a flash of dashboard before the redirect fires.
+  useEffect(() => {
+    if (onboarding && !onboarding.isComplete) {
+      navigate("/dashboard/getting-started", { replace: true });
+    }
+  }, [onboarding, navigate]);
 
   // Per-channel breakdown — fetch stats for the most recent campaign so the
   // cards have a concrete number; if there's no campaign yet, leave em-dashes.
@@ -64,6 +77,15 @@ export default function TrainingAdminDashboard() {
           New Campaign <ArrowRight className="h-4 w-4 ml-1" />
         </Button>
       </div>
+
+      {/* Contextual nudge — visible only after onboarding */}
+      {onboarding?.isComplete && (
+        <WhatsNextCard
+          campaigns={campaigns ?? []}
+          totals={orgTotals ?? null}
+          employeeCount={activeEmployees}
+        />
+      )}
 
       {/* Summary stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

@@ -20,6 +20,7 @@ import {
 } from "@/hooks/useTemplates";
 import { useMyOrganization } from "@/hooks/useMyOrganization";
 import { useAuth } from "@/hooks/useAuth";
+import { ReasonBanner } from "@/components/onboarding/ReasonBanner";
 import { formatDate } from "@/lib/utils";
 import type { EmailTemplate, SmsTemplate, VoiceTemplate, DirectMailTemplate } from "@/types";
 
@@ -181,8 +182,17 @@ export default function Templates() {
     { value: "direct_mail", label: "Dishing",   icon: <Package       className="h-4 w-4" />, color: "text-dishing",   count: dmTemplates?.length     },
   ];
 
+  const totalTemplates =
+    (emailTemplates?.length ?? 0) +
+    (smsTemplates?.length   ?? 0) +
+    (voiceTemplates?.length ?? 0) +
+    (dmTemplates?.length    ?? 0);
+
   return (
     <div className="p-6 space-y-6">
+      {/* Reason banner — shown when CampaignNew bounced the user here */}
+      <ReasonBanner ready={totalTemplates > 0} />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

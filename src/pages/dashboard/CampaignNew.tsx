@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Check, Mail, MessageSquare, Phone, MailOpen, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Mail, MessageSquare, Phone, MailOpen, Loader2, Pencil } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -70,6 +70,7 @@ export default function CampaignNew() {
   const [searchParams] = useSearchParams();
   const editId = searchParams.get("edit");
   const isEdit = !!editId;
+  const isOnboarding = searchParams.get("onboarding") === "1";
 
   const { user } = useAuth();
   const { data: org, isLoading: orgLoading } = useMyOrganization();
@@ -239,7 +240,14 @@ export default function CampaignNew() {
         toast.success(isEdit ? "Draft updated." : "Campaign saved as draft.");
       }
 
-      navigate(`/dashboard/campaigns/${campaignId}`);
+      // During onboarding, channel the user back to Getting Started so
+      // they can advance to the "results" step. Otherwise go to the
+      // campaign detail page as usual.
+      if (isOnboarding && launchNow) {
+        navigate("/dashboard/getting-started?step=results");
+      } else {
+        navigate(`/dashboard/campaigns/${campaignId}`);
+      }
     } catch {
       toast.error(isEdit ? "Failed to update campaign." : "Failed to create campaign.");
     } finally {
@@ -261,6 +269,25 @@ export default function CampaignNew() {
     );
   }
 
+  // Pre-flight: a campaign needs at least one employee and one template.
+  // Bounce the user to fix the gap rather than letting them stagger
+  // through Step 4/Step 3 with empty lists.
+  if (!isEdit && org && employees !== undefined) {
+    if (employees.length === 0) {
+      navigate("/dashboard/employees?reason=campaign-needs-targets", { replace: true });
+      return null;
+    }
+    const totalTemplates =
+      (emailTemplates ?? []).length +
+      (smsTemplates   ?? []).length +
+      (voiceTemplates ?? []).length +
+      (dmTemplates    ?? []).length;
+    if (totalTemplates === 0) {
+      navigate("/dashboard/templates?reason=campaign-needs-templates", { replace: true });
+      return null;
+    }
+  }
+
   if (!org) {
     return (
       <div className="p-6 text-center text-muted-foreground">
@@ -276,13 +303,25 @@ export default function CampaignNew() {
     <div className="p-6 max-w-3xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard/campaigns")}>
-          <ArrowLeft className="h-4 w-4 mr-1" /> Campaigns
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() =>
+            navigate(isOnboarding ? "/dashboard/getting-started" : "/dashboard/campaigns")
+          }
+        >
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          {isOnboarding ? "Getting Started" : "Campaigns"}
         </Button>
         <div>
-          <h1 className="text-2xl font-semibold">
-            {isEdit ? "Edit Campaign" : "New Campaign"}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold">
+              {isEdit ? "Edit Campaign" : "New Campaign"}
+            </h1>
+            {isOnboarding && (
+              <Badge variant="secondary" className="text-xs">Onboarding · Step 4 of 5</Badge>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground">
             {org?.name}{isEdit && existing && ` · editing draft "${existing.name}"`}
           </p>
@@ -550,10 +589,13 @@ export default function CampaignNew() {
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="rounded-lg border divide-y">
-              <ReviewRow label="Campaign Name" value={state.name} />
-              {state.description && <ReviewRow label="Description" value={state.description} />}
+              <ReviewRow label="Campaign Name" value={state.name} onEdit={() => setStep(1)} />
+              {state.description && (
+                <ReviewRow label="Description" value={state.description} onEdit={() => setStep(1)} />
+              )}
               <ReviewRow
                 label="Channels"
+                onEdit={() => setStep(2)}
                 value={
                   <div className="flex gap-1 flex-wrap">
                     {state.channels.map((ch) => (
@@ -564,9 +606,43 @@ export default function CampaignNew() {
                   </div>
                 }
               />
-              <ReviewRow label="Targets" value={`${state.targetIds.length} employee(s) selected`} />
-              {state.startDate && <ReviewRow label="Start Date" value={new Date(state.startDate).toLocaleString()} />}
-              {state.endDate   && <ReviewRow label="End Date"   value={new Date(state.endDate).toLocaleString()} />}
+              <ReviewRow
+                label="Templates"
+                onEdit={() => setStep(3)}
+                value={
+                  <div className="text-xs text-muted-foreground">
+                    {state.channels.length === 0
+                      ? "—"
+                      : state.channels.map((ch) => CHANNEL_CONFIG[ch].label).join(" · ")}
+                  </div>
+                }
+              />
+              <ReviewRow
+                label="Targets"
+                value={`${state.targetIds.length} employee(s) selected`}
+                onEdit={() => setStep(4)}
+              />
+              {state.startDate && (
+                <ReviewRow
+                  label="Start Date"
+                  value={new Date(state.startDate).toLocaleString()}
+                  onEdit={() => setStep(5)}
+                />
+              )}
+              {state.endDate && (
+                <ReviewRow
+                  label="End Date"
+                  value={new Date(state.endDate).toLocaleString()}
+                  onEdit={() => setStep(5)}
+                />
+              )}
+              {!state.startDate && !state.endDate && (
+                <ReviewRow
+                  label="Schedule"
+                  value={<span className="text-xs text-muted-foreground italic">Send immediately on launch</span>}
+                  onEdit={() => setStep(5)}
+                />
+              )}
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 justify-between">
@@ -589,11 +665,27 @@ export default function CampaignNew() {
   );
 }
 
-function ReviewRow({ label, value }: { label: string; value: React.ReactNode }) {
+function ReviewRow({
+  label, value, onEdit,
+}: {
+  label:   string;
+  value:   React.ReactNode;
+  onEdit?: () => void;
+}) {
   return (
-    <div className="flex items-start gap-4 px-4 py-3">
+    <div className="flex items-start gap-4 px-4 py-3 group">
       <p className="text-sm text-muted-foreground w-32 shrink-0">{label}</p>
       <div className="text-sm font-medium flex-1">{value}</div>
+      {onEdit && (
+        <button
+          type="button"
+          onClick={onEdit}
+          className="text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 shrink-0"
+          aria-label={`Edit ${label.toLowerCase()}`}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+      )}
     </div>
   );
 }
